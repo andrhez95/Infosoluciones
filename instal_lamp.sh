@@ -48,15 +48,20 @@ echo "<?php phpinfo(); ?>" | sudo tee /var/www/infosoluciones.com/info.php
 
 # Paso 9 — Instalar Certbot y obtener certificado SSL
 sudo apt install certbot python3-certbot-apache -y
-sudo certbot --apache --non-interactive --agree-tos --redirect -m soporte@infosoluciones.com -d infosoluciones.com -d www.infosoluciones.com
 
 # Paso 10 — Verificar renovación automática de Certbot
 sudo systemctl list-timers | grep certbot
 
+# Paso 11 — Instalar y configurar UFW (firewall)
+sudo apt install ufw -y
+sudo ufw allow OpenSSH
+sudo ufw allow 'Apache Full'
+sudo ufw --force enable
 
 # Paso 12 — Mejorar configuración de Apache (ocultar versión)
 sudo sed -i 's/^ServerTokens OS/ServerTokens Prod/' /etc/apache2/conf-available/security.conf
 sudo sed -i 's/^ServerSignature On/ServerSignature Off/' /etc/apache2/conf-available/security.conf
+sudo systemctl reload apache2
 
 # Paso 13 — Mejorar configuración de PHP
 PHPINI=$(php -i | grep "Loaded Configuration File" | awk '{print $5}')
@@ -64,5 +69,9 @@ sudo sed -i 's/^expose_php = On/expose_php = Off/' $PHPINI
 sudo sed -i 's/^display_errors = On/display_errors = Off/' $PHPINI
 sudo sed -i 's/^;log_errors = On/log_errors = On/' $PHPINI
 
-# Reiniciar Apache para aplicar cambios
+# Reiniciar Apache para aplicar cambios de PHP
 sudo systemctl restart apache2
+
+
+
+echo "Instalación y configuración completadas. Visita http://infosoluciones.com/info.php para verificar la instalación de PHP."
