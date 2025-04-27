@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  wordpress:
+    image: wordpress:latest
+    container_name: infosoluciones_wordpress
+    restart: always
+    ports:
+      - "8000:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: infosoluciones_user
+      WORDPRESS_DB_PASSWORD: infosoluciones_pass
+      WORDPRESS_DB_NAME: infosoluciones_db
+
+      # Datos para la instalación automática de WordPress
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_SITEURL', 'http://' . $_SERVER['HTTP_HOST']);
+        define('WP_HOME', 'http://' . $_SERVER['HTTP_HOST']);
+        define('WPLANG', 'es_ES'); // Idioma español
+      WORDPRESS_TITLE: "Infosoluciones"
+      WORDPRESS_ADMIN_USER: enoc
+      WORDPRESS_ADMIN_PASSWORD: Millonarios_15
+      WORDPRESS_ADMIN_EMAIL: andrhez95@gmail.com
+    volumes:
+      - ./wordpress:/var/www/html
+    networks:
+      - infosoluciones_net
+
+  db:
+    image: mysql:5.7
+    container_name: infosoluciones_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: infosoluciones_db
+      MYSQL_USER: infosoluciones_user
+      MYSQL_PASSWORD: infosoluciones_pass
+      MYSQL_ROOT_PASSWORD: rootpassword
+    volumes:
+      - ./db_data:/var/lib/mysql
+    networks:
+      - infosoluciones_net
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: infosoluciones_phpmyadmin
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+    networks:
+      - infosoluciones_net
+
+networks:
+  infosoluciones_net:
+
+volumes:
+  db_data:
