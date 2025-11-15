@@ -1,59 +1,133 @@
 version: '3.8'
 
 services:
-  wordpress:
-    image: wordpress:latest
-    container_name: infosoluciones_wordpress
-    restart: always
-    ports:
-      - "8000:80"
-    environment:
-      WORDPRESS_DB_HOST: db
-      WORDPRESS_DB_USER: infosoluciones_user
-      WORDPRESS_DB_PASSWORD: infosoluciones_pass
-      WORDPRESS_DB_NAME: infosoluciones_db
-
-      # Datos para la instalación automática de WordPress
-      WORDPRESS_CONFIG_EXTRA: |
-        define('WP_SITEURL', 'http://' . $_SERVER['HTTP_HOST']);
-        define('WP_HOME', 'http://' . $_SERVER['HTTP_HOST']);
-        define('WPLANG', 'es_ES'); // Idioma español
-      WORDPRESS_TITLE: "Infosoluciones"
-      WORDPRESS_ADMIN_USER: enoc
-      WORDPRESS_ADMIN_PASSWORD: Millonarios_15
-      WORDPRESS_ADMIN_EMAIL: andrhez95@gmail.com
-    volumes:
-      - ./wordpress:/var/www/html
-    networks:
-      - infosoluciones_net
-
   db:
-    image: mysql:5.7
+    image: mysql:8.0
     container_name: infosoluciones_db
-    restart: always
+    restart: unless-stopped
+    env_file: .env
     environment:
-      MYSQL_DATABASE: infosoluciones_db
-      MYSQL_USER: infosoluciones_user
-      MYSQL_PASSWORD: infosoluciones_pass
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-      - ./db_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
-      - infosoluciones_net
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: infosoluciones_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  wordpress:
+    image: wordpress:6.4-php8.1-apache
+    container_name: infosoluciones_wordpress
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      # Extra config appended to wp-config.php by the official image
+      WORDPRESS_CONFIG_EXTRA: |
+        define('DISALLOW_FILE_EDIT', true);
+        define('WP_REDIS_HOST', 'redis');
+        define('FORCE_SSL_ADMIN', true);
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+          $_SERVER['HTTPS'] = 'on';
+        }
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wp-config-extra.php:/usr/src/wordpress/wp-config-extra.php:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal
+
+  wp-cli:
+    image: wordpress:cli-2.6
+    container_name: infosoluciones_wpcli
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - wordpress_data:/var/www/html
+    working_dir: /var/www/html
+    depends_on:
+      - wordpress
+      - db
+    networks:
+      - internal
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin
+    image: phpmyadmin/phpmyadmin:5.2
     container_name: infosoluciones_phpmyadmin
-    restart: always
+    restart: unless-stopped
     ports:
       - "8080:80"
+    env_file: .env
     environment:
       PMA_HOST: db
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+    depends_on:
+      - db
     networks:
-      - infosoluciones_net
+      - internal
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.4.0
+    container_name: infosoluciones_cloudflared
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    # Use the tunnel credentials placed in ./cloudflared (see README)
+    command: tunnel run
+    depends_on:
+      - wordpress
+    networks:
+      - internal
 
 networks:
-  infosoluciones_net:
+  internal:
+    driver: bridge
 
 volumes:
   db_data:
+  wordpress_data:
+  redis_data:
