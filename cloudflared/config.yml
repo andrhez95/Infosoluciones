@@ -1,0 +1,11 @@
+# Cloudflared tunnel configuration (place tunnel credentials JSON next to this file).
+# Replace <TUNNEL-UUID> and yourdomain.example with values from Cloudflare dashboard.
+# See README.md for steps to create the tunnel.
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  - hostname: yourdomain.example
+    service: http://wordpress:80
+  - service: http_status:404
